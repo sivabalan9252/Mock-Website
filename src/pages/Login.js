@@ -3,6 +3,12 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 
+// Intercom test identity (email + user_id) from environment
+const INTERCOM_TEST_EMAIL = process.env.REACT_APP_INTERCOM_TEST_EMAIL
+  ? process.env.REACT_APP_INTERCOM_TEST_EMAIL.toLowerCase().trim()
+  : 'sivabalan9252@gmail.com';
+const INTERCOM_TEST_USER_ID = process.env.REACT_APP_INTERCOM_TEST_USER_ID || 'sg0009';
+
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,17 +33,25 @@ const Login = () => {
       }
 
       // Attempt login
-      await login(email, password);
+      const user = await login(email, password);
       
       // Update Intercom with user information if available
       if (window.identifyIntercomUser) {
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Use env-configured test user_id when email matches, otherwise fallback to uid/email
+        const userId = normalizedEmail === INTERCOM_TEST_EMAIL
+          ? INTERCOM_TEST_USER_ID
+          : (user?.uid || normalizedEmail);
+        
         window.identifyIntercomUser({
-          email,
-          user_id: email.toLowerCase().trim(),
+          email: normalizedEmail,
+          user_id: userId,
+          name: user?.displayName || 'User',
           created_at: Math.floor(Date.now() / 1000)
         });
         
-        console.log('Intercom: User identified on login:', email);
+        console.log('Intercom: User identified on login:', normalizedEmail, 'with user_id:', userId);
       }
       
       // Update Last Page URL in Intercom

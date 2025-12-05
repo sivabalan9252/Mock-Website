@@ -5,6 +5,12 @@ import { useAuth } from '../hooks/useAuth';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
+// Intercom test identity (email + user_id) from environment
+const INTERCOM_TEST_EMAIL = process.env.REACT_APP_INTERCOM_TEST_EMAIL
+  ? process.env.REACT_APP_INTERCOM_TEST_EMAIL.toLowerCase().trim()
+  : 'sivabalan9252@gmail.com';
+const INTERCOM_TEST_USER_ID = process.env.REACT_APP_INTERCOM_TEST_USER_ID || 'sg0009';
+
 const Signup = () => {
   const [formData, setFormData] = useState({
     name: '',
@@ -87,15 +93,22 @@ const Signup = () => {
       
       // Identify user in Intercom
       if (window.identifyIntercomUser) {
+        const normalizedEmail = formData.email.toLowerCase().trim();
+
+        // Use env-configured test user_id when email matches, otherwise use uid
+        const userId = normalizedEmail === INTERCOM_TEST_EMAIL
+          ? INTERCOM_TEST_USER_ID
+          : user.uid;
+        
         window.identifyIntercomUser({
-          user_id: formData.email.toLowerCase().trim(),
-          email: formData.email,
+          user_id: userId,
+          email: normalizedEmail,
           name: formData.name,
           city: city,
           created_at: timestamp
         });
         
-        console.log('Intercom: New user identified on signup:', formData.email);
+        console.log('Intercom: New user identified on signup:', normalizedEmail, 'with user_id:', userId);
       }
       
       // Update Last Page URL in Intercom

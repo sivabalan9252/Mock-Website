@@ -7,6 +7,45 @@
 
 class IntercomUtils {
   static APP_ID = process.env.REACT_APP_INTERCOM_APP_ID;
+  static isReady = false;
+  
+  /**
+   * Check if Intercom is ready to use
+   * @returns {boolean} True if Intercom is loaded and ready
+   */
+  static checkReady() {
+    // Check if Intercom exists and is not just the queue function
+    return window.Intercom && typeof window.Intercom === 'function' && !window.Intercom.q;
+  }
+  
+  /**
+   * Wait for Intercom to be ready
+   * @param {number} timeout - Maximum time to wait in milliseconds (default: 5000)
+   * @returns {Promise<boolean>} Resolves to true when ready, false on timeout
+   */
+  static waitForReady(timeout = 5000) {
+    return new Promise((resolve) => {
+      // If already ready, resolve immediately
+      if (this.checkReady()) {
+        this.isReady = true;
+        resolve(true);
+        return;
+      }
+      
+      const startTime = Date.now();
+      const checkInterval = setInterval(() => {
+        if (this.checkReady()) {
+          this.isReady = true;
+          clearInterval(checkInterval);
+          resolve(true);
+        } else if (Date.now() - startTime > timeout) {
+          clearInterval(checkInterval);
+          console.error('Intercom: Timed out waiting for Intercom to be ready');
+          resolve(false);
+        }
+      }, 100);
+    });
+  }
   
   /**
    * Initialize Intercom with proper settings and event handlers
@@ -71,59 +110,69 @@ class IntercomUtils {
    * @param {string} url - URL to set (optional, defaults to current URL)
    * @param {boolean} trackEvent - Whether to track this as an event (default: false)
    */
-  static updateLastPageUrl(url, trackEvent = false) {
+  static async updateLastPageUrl(url, trackEvent = false) {
     console.debug('Intercom: updateLastPageUrl called', { url, trackEvent });
     
-    if (window.Intercom && typeof window.Intercom === 'function') {
-      let pageUrl = url || window.location.pathname;
-      const timestamp = Math.floor(Date.now() / 1000);
-      
-      // Format URL as stellar/home
-      if (pageUrl.startsWith('/')) {
-        pageUrl = pageUrl.substring(1);
+    if (!window.Intercom || typeof window.Intercom !== 'function') {
+      console.warn('Intercom: Intercom not available, skipping URL update');
+      return;
+    }
+    
+    // Wait for Intercom to be ready (with shorter timeout for non-critical updates)
+    const isReady = await this.waitForReady(3000);
+    if (!isReady) {
+      console.warn('Intercom: Could not update Last Page URL - Intercom not ready');
+      return;
+    }
+    
+    let pageUrl = url || window.location.pathname;
+    const timestamp = Math.floor(Date.now() / 1000);
+    
+    // Format URL as stellar/home
+    if (pageUrl.startsWith('/')) {
+      pageUrl = pageUrl.substring(1);
+    }
+    if (pageUrl === '') {
+      pageUrl = 'home';
+    }
+    pageUrl = `stellar/${pageUrl}`;
+    
+    console.debug('Intercom: Updating Last Page URL to', pageUrl);
+    
+    // Update Intercom with the correct attribute name
+    window.Intercom('update', {
+      user_id: window.intercomSettings.user_id || 'anonymous_user',
+      custom_attributes: {
+        "Last Page URL": pageUrl,
+        "Last URL Update Time": timestamp
       }
-      if (pageUrl === '') {
-        pageUrl = 'home';
+    });
+    
+    // Store in localStorage with exact key names
+    localStorage.setItem('intercom_settings', JSON.stringify({
+      ...this.loadStoredUserData(),
+      custom_attributes: {
+        ...this.loadStoredUserData().custom_attributes,
+        "Last Page URL": pageUrl,
+        "Last URL Update Time": timestamp
       }
-      pageUrl = `stellar/${pageUrl}`;
-      
-      console.debug('Intercom: Updating Last Page URL to', pageUrl);
-      
-      // Update Intercom with the correct attribute name
-      window.Intercom('update', {
-        user_id: window.intercomSettings.user_id || 'anonymous_user',
-        custom_attributes: {
-          "Last Page URL": pageUrl,
-          "Last URL Update Time": timestamp
-        }
+    }));
+    
+    // Update intercomSettings object
+    if (window.intercomSettings) {
+      window.intercomSettings.custom_attributes = {
+        ...window.intercomSettings.custom_attributes,
+        "Last Page URL": pageUrl,
+        "Last URL Update Time": timestamp
+      };
+    }
+    
+    // Track page view event if requested
+    if (trackEvent) {
+      window.Intercom('trackEvent', 'page_view', {
+        page_url: pageUrl,
+        timestamp: timestamp
       });
-      
-      // Store in localStorage with exact key names
-      localStorage.setItem('intercom_settings', JSON.stringify({
-        ...this.loadStoredUserData(),
-        custom_attributes: {
-          ...this.loadStoredUserData().custom_attributes,
-          "Last Page URL": pageUrl,
-          "Last URL Update Time": timestamp
-        }
-      }));
-      
-      // Update intercomSettings object
-      if (window.intercomSettings) {
-        window.intercomSettings.custom_attributes = {
-          ...window.intercomSettings.custom_attributes,
-          "Last Page URL": pageUrl,
-          "Last URL Update Time": timestamp
-        };
-      }
-      
-      // Track page view event if requested
-      if (trackEvent) {
-        window.Intercom('trackEvent', 'page_view', {
-          page_url: pageUrl,
-          timestamp: timestamp
-        });
-      }
     }
   }
   
@@ -151,8 +200,18 @@ class IntercomUtils {
    * Identify user with Intercom
    * @param {Object} userData - User data to identify
    */
-  static identifyUser(userData) {
-    if (!window.Intercom) return;
+  static async identifyUser(userData) {
+    if (!window.Intercom) {
+      console.warn('Intercom: Intercom not available, skipping user identification');
+      return;
+    }
+    
+    // Wait for Intercom to be ready before updating
+    const isReady = await this.waitForReady(5000);
+    if (!isReady) {
+      console.error('Intercom: Could not identify user - Intercom not ready');
+      return;
+    }
     
     const timestamp = Math.floor(Date.now() / 1000);
     const userInfo = {
@@ -161,8 +220,8 @@ class IntercomUtils {
       ...userData
     };
     
-    // Ensure we have a consistent user_id (using email)
-    if (userData.email && !userData.user_id) {
+    // Only set user_id as fallback if not already provided
+    if (!userInfo.user_id && userData.email) {
       userInfo.user_id = userData.email.toLowerCase().trim();
     }
     

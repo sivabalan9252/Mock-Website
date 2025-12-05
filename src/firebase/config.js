@@ -4,12 +4,12 @@ import { getStorage } from 'firebase/storage';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "stellar-creative-agency.firebaseapp.com",
-  projectId: "stellar-creative-agency",
-  storageBucket: "stellar-creative-agency.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCMzON1UfDModd455j7CmRkzGVzBAom1lc",
+  authDomain: "mock-website-db214.firebaseapp.com",
+  projectId: "mock-website-db214",
+  storageBucket: "mock-website-db214.firebasestorage.app",
+  messagingSenderId: "626958642346",
+  appId: "1:626958642346:web:f351f2827ed684d85774d3"
 };
 
 // Initialize Firebase

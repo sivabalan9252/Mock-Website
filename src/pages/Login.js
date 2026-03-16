@@ -3,12 +3,6 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 
-// Intercom test identity (email + user_id) from environment
-const INTERCOM_TEST_EMAIL = process.env.REACT_APP_INTERCOM_TEST_EMAIL
-  ? process.env.REACT_APP_INTERCOM_TEST_EMAIL.toLowerCase().trim()
-  : 'sivabalan9252@gmail.com';
-const INTERCOM_TEST_USER_ID = process.env.REACT_APP_INTERCOM_TEST_USER_ID || 'sg0009';
-
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,32 +26,8 @@ const Login = () => {
         throw new Error('Please fill in all fields');
       }
 
-      // Attempt login
-      const user = await login(email, password);
-      
-      // Update Intercom with user information if available
-      if (window.identifyIntercomUser) {
-        const normalizedEmail = email.toLowerCase().trim();
-
-        // Use env-configured test user_id when email matches, otherwise fallback to uid/email
-        const userId = normalizedEmail === INTERCOM_TEST_EMAIL
-          ? INTERCOM_TEST_USER_ID
-          : (user?.uid || normalizedEmail);
-        
-        window.identifyIntercomUser({
-          email: normalizedEmail,
-          user_id: userId,
-          name: user?.displayName || 'User',
-          created_at: Math.floor(Date.now() / 1000)
-        });
-        
-        console.log('Intercom: User identified on login:', normalizedEmail, 'with user_id:', userId);
-      }
-      
-      // Update Last Page URL in Intercom
-      if (window.IntercomUtils && window.IntercomUtils.updateLastPageUrl) {
-        window.IntercomUtils.updateLastPageUrl();
-      }
+      // Attempt login — Intercom JWT boot is handled automatically in App.js on auth state change
+      await login(email, password);
       
       // Redirect after successful login
       navigate(redirectPath, { replace: true });

@@ -6,50 +6,92 @@ import Home from './pages/Home';
 import Contact from './pages/Contact';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 
-import IntercomUtils from './utils/IntercomUtils';
-import { loadIntercom } from './utils/loadIntercom';
+import { loadIntercom, bootIntercomWithJWT, shutdownIntercom } from './utils/loadIntercom';
 
-function App() {
+const INTERCOM_APP_ID = process.env.REACT_APP_INTERCOM_APP_ID || 'v77sghen';
+
+function AppContent() {
   const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
 
+  // Load the Intercom script once on mount
   useEffect(() => {
-    // Load the Intercom script with the app ID.
-    // The script will automatically initialize itself using window.intercomSettings.
-    loadIntercom(process.env.REACT_APP_INTERCOM_APP_ID);
+    loadIntercom(INTERCOM_APP_ID);
   }, []);
 
-  // Update Last Page URL on route change
+  // When auth state changes, boot Intercom accordingly
   useEffect(() => {
-    if (window.IntercomUtils) {
-      // We only want to update the Last Page URL when a chat is initiated
-      // This will be handled by the onShow and onMessageSent event handlers
-      // set up in the IntercomUtils
-      console.debug('Route changed to:', location.pathname);
+    if (isAuthenticated && user) {
+      // Fetch JWT from our API and boot Intercom securely
+      const bootWithJWT = async () => {
+        try {
+          const normalizedEmail = (user.email || '').toLowerCase().trim();
+          const userId = user.uid || normalizedEmail;
+
+          const response = await fetch('/api/intercom-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: userId,
+              email: normalizedEmail,
+            }),
+          });
+
+          if (response.ok) {
+            const { token } = await response.json();
+            bootIntercomWithJWT(
+              {
+                user_id: userId,
+                email: normalizedEmail,
+                name: user.displayName || 'User',
+                created_at: Math.floor(Date.now() / 1000),
+              },
+              token
+            );
+          } else {
+            console.error('Intercom: Failed to fetch JWT token');
+          }
+        } catch (err) {
+          console.error('Intercom: Error fetching JWT', err);
+        }
+      };
+      bootWithJWT();
+    } else {
+      // User logged out — shutdown and reboot as anonymous
+      shutdownIntercom();
+    }
+  }, [isAuthenticated, user]);
+
+  // Update Intercom on route change
+  useEffect(() => {
+    if (window.Intercom && typeof window.Intercom === 'function') {
+      window.Intercom('update');
     }
   }, [location]);
 
-  // Make IntercomUtils available globally
-  useEffect(() => {
-    window.identifyIntercomUser = IntercomUtils.identifyUser.bind(IntercomUtils);
-  }, []);
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <main className="flex-grow">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+        </Routes>
+      </main>
+      <Footer />
+    </div>
+  );
+}
 
+function App() {
   return (
     <AuthProvider>
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/home" element={<Home />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
+      <AppContent />
     </AuthProvider>
   );
 }

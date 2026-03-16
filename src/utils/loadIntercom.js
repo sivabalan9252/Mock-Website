@@ -58,7 +58,8 @@ export const loadIntercom = (appId) => {
 };
 
 /**
- * Boot Intercom with JWT for authenticated users
+ * Boot Intercom with JWT for authenticated users.
+ * Uses the recommended shutdown → boot pattern for SPA identity swaps.
  * @param {Object} userData - User data (user_id, email, name)
  * @param {string} jwtToken - JWT token from server
  */
@@ -68,20 +69,31 @@ export const bootIntercomWithJWT = (userData, jwtToken) => {
     return;
   }
 
+  // Step 1: Hide any open messenger UI before swapping identity
+  window.Intercom('hide');
+
+  // Step 2: Shutdown the current (visitor/anonymous) session
+  window.Intercom('shutdown');
+
+  // Step 3: Boot a NEW session as the authenticated user with JWT
   const settings = {
     api_base: 'https://api-iam.intercom.io',
     app_id: process.env.REACT_APP_INTERCOM_APP_ID || 'v77sghen',
     intercom_user_jwt: jwtToken,
-    name: userData.name || undefined,
-    email: userData.email || undefined,
     user_id: userData.user_id || undefined,
+    email: userData.email || undefined,
+    name: userData.name || undefined,
     created_at: userData.created_at || Math.floor(Date.now() / 1000),
     session_duration: 86400000, // 1 day
   };
 
   window.intercomSettings = settings;
   window.Intercom('boot', settings);
-  console.log('Intercom: Booted with JWT for user', userData.email || userData.user_id);
+
+  // Step 4: Trigger a check for messages
+  window.Intercom('update');
+
+  console.log('Intercom: shutdown → boot with JWT for user', userData.email || userData.user_id);
 };
 
 /**

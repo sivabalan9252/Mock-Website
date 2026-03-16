@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -14,7 +14,8 @@ const INTERCOM_APP_ID = process.env.REACT_APP_INTERCOM_APP_ID || 'v77sghen';
 
 function AppContent() {
   const location = useLocation();
-  const { user, isAuthenticated } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
+  const hasBootedRef = useRef(false);
 
   // Load the Intercom script once on mount
   useEffect(() => {
@@ -23,6 +24,9 @@ function AppContent() {
 
   // When auth state changes, boot Intercom accordingly
   useEffect(() => {
+    // Don't act until auth state is determined
+    if (loading) return;
+
     if (isAuthenticated && user) {
       // Fetch JWT from our API and boot Intercom securely
       const bootWithJWT = async () => {
@@ -50,19 +54,21 @@ function AppContent() {
               },
               token
             );
+            hasBootedRef.current = true;
           } else {
-            console.error('Intercom: Failed to fetch JWT token');
+            console.error('Intercom: Failed to fetch JWT token, status:', response.status);
           }
         } catch (err) {
           console.error('Intercom: Error fetching JWT', err);
         }
       };
       bootWithJWT();
-    } else {
-      // User logged out — shutdown and reboot as anonymous
+    } else if (hasBootedRef.current) {
+      // User logged out — shutdown and reboot as anonymous visitor
       shutdownIntercom();
+      hasBootedRef.current = false;
     }
-  }, [isAuthenticated, user]);
+  }, [loading, isAuthenticated, user]);
 
   // Update Intercom on route change
   useEffect(() => {

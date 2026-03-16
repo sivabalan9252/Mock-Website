@@ -76,14 +76,17 @@ const Signup = () => {
       const timestamp = Math.floor(Date.now() / 1000);
       const city = await detectCity();
       
-      // Create user document in Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        name: formData.name,
-        email: formData.email,
-        city: city,
-        createdAt: timestamp,
-        updatedAt: timestamp
-      });
+      // Create user document in Firestore (skip in mock auth mode)
+      const useMockAuth = process.env.REACT_APP_USE_MOCK_AUTH === 'true';
+      if (!useMockAuth) {
+        await setDoc(doc(db, 'users', user.uid), {
+          name: formData.name,
+          email: formData.email,
+          city: city,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        });
+      }
       
       // Intercom JWT boot is handled automatically in App.js on auth state change
       
